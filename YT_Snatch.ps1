@@ -10,8 +10,18 @@ if ([string]::IsNullOrWhiteSpace($playlistUrl)) {
 }
 
 # Set output directory dynamically to user's Downloads folder
-$outputDir = [System.IO.Path]::Combine([System.Environment]::GetFolderPath("UserProfile"), "Downloads", "YT-Downloads")
+$outputDir = [System.IO.Path]::Combine([System.Environment]::GetFolderPath("UserProfile"), "Downloads", "YT_Snatch")
 if (!(Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir | Out-Null }
+
+# Define FFmpeg directory dynamically
+$ffmpegDir = [System.IO.Path]::Combine($outputDir, "ffmpeg-7.1-full_build", "bin")
+$ffmpegPath = [System.IO.Path]::Combine($ffmpegDir, "ffmpeg.exe")
+
+# Check if FFmpeg exists
+if (!(Test-Path $ffmpegPath)) {
+    Write-Host "FFmpeg not found in $ffmpegDir. Please install FFmpeg or provide the correct path."
+    exit
+}
 
 # Create a GUI form for selecting format
 $popup = New-Object System.Windows.Forms.Form
@@ -44,10 +54,10 @@ $result = $popup.ShowDialog()
 
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     $format = "mp3"
-    $formatArg = "-x --audio-format mp3"
+    $formatArgs = "-x --audio-format mp3"
 } elseif ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
     $format = "mp4"
-    $formatArg = "-f best"
+    $formatArgs = "-f best"
 } else {
     Write-Host "No format selected. Exiting..."
     exit
@@ -59,7 +69,15 @@ Write-Host "Downloading playlist to: $outputDir"
 # Change to output directory
 Set-Location $outputDir
 
-# Execute yt-dlp to download the playlist
-.\yt-dlp.exe $formatArg -o "%(playlist_index)s - %(title)s.%(ext)s" $playlistUrl
+# Execute yt-dlp with properly formatted arguments
+$ytDlpPath = ".\yt-dlp.exe"
+$outputTemplate = "%(playlist_index)s - %(title)s.%(ext)s"
+
+# Construct arguments to avoid invalid URL errors
+$finalArgs = "$formatArgs --ffmpeg-location `"$ffmpegPath`" --default-search `"ytsearch`" -o `"$outputTemplate`" `"$playlistUrl`""
+
+# Start the process and capture output
+Start-Process -FilePath $ytDlpPath -ArgumentList $finalArgs -NoNewWindow -Wait
 
 Write-Host "Download completed!"
+[System.Windows.Forms.MessageBox]::Show("Download completed!", "Success", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
